@@ -1,6 +1,6 @@
 include $(GOROOT)/src/Make.inc
 
-TARG=http/uwsgi
+TARG=github.com/mattn/go-uwsgi
 GOFILES=\
 	uwsgi.go\
 
