@@ -2,14 +2,14 @@ package uwsgi
 
 import (
 	"bufio"
-	"http"
-	"net"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"io/ioutil"
-	"fmt"
-	"testing"
+	"net"
+	"net/http"
 	"syscall"
+	"testing"
 )
 
 func writeKV(fd io.Writer, k, v string) {

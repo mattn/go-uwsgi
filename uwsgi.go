@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"os"
 	"strconv"
 )
 
@@ -32,16 +31,16 @@ type Conn struct {
 	writer net.Conn
 }
 
-func (c *Conn) Read(b []byte) (int, os.Error) {
+func (c *Conn) Read(b []byte) (int, error) {
 	n, e := c.reader.Read(b)
 	return n, e
 }
 
-func (c *Conn) Write(b []byte) (int, os.Error) {
+func (c *Conn) Write(b []byte) (int, error) {
 	return c.writer.Write(b)
 }
 
-func (c *Conn) Close() os.Error {
+func (c *Conn) Close() error {
 	return c.writer.Close()
 }
 
@@ -53,15 +52,15 @@ func (c *Conn) RemoteAddr() net.Addr {
 	return c.writer.RemoteAddr()
 }
 
-func (c *Conn) SetTimeout(s int64) os.Error {
+func (c *Conn) SetTimeout(s int64) error {
 	return c.writer.SetTimeout(s)
 }
 
-func (c *Conn) SetReadTimeout(s int64) os.Error {
+func (c *Conn) SetReadTimeout(s int64) error {
 	return c.writer.SetReadTimeout(s)
 }
 
-func (c *Conn) SetWriteTimeout(s int64) os.Error {
+func (c *Conn) SetWriteTimeout(s int64) error {
 	return c.writer.SetWriteTimeout(s)
 }
 
@@ -69,13 +68,13 @@ func (l *Listener) Addr() net.Addr {
 	return l.Listener.Addr()
 }
 
-func (l *Listener) Close() os.Error {
+func (l *Listener) Close() error {
 	return l.Listener.Close()
 }
 
 // Accept conduct as net.Listener. uWSGI protocol is working good for CGI.
 // This function parse headers and pass to the Server.
-func (l *Listener) Accept() (net.Conn, os.Error) {
+func (l *Listener) Accept() (net.Conn, error) {
 	fd, err := l.Listener.Accept()
 	if err != nil {
 		return nil, err
@@ -158,7 +157,7 @@ func (l *Listener) Accept() (net.Conn, os.Error) {
 	buf.Write([]byte("\r\n"))
 
 	if cl > 0 {
-		io.Copyn(buf, fd, cl)
+		io.CopyN(buf, fd, cl)
 	}
 
 	return c, nil
