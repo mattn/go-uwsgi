@@ -8,8 +8,8 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
-	"syscall"
 	"testing"
+	"time"
 )
 
 func writeKV(fd io.Writer, k, v string) {
@@ -45,12 +45,12 @@ func TestServer(t *testing.T) {
 	go server.Serve(&Listener{l})
 
 	m := map[string]string{
-		"REQUEST_METHOD":  "POST",
-		"REQUEST_URI":     "/foo",
-		"CONTENT_LENGTH":  "8",
-		"CONTENT_TYPE":    "text/plain",
-		"SERVER_PROTOCOL": "HTTP/1.1",
-		"HTTP_USER_AGENT": "go",
+		"REQUEST_METHOD":    "POST",
+		"REQUEST_URI":       "/foo",
+		"CONTENT_LENGTH":    "8",
+		"SERVER_PROTOCOL":   "HTTP/1.1",
+		"HTTP_CONTENT_TYPE": "application/x-www-form-urlencoded",
+		"HTTP_USER_AGENT":   "go",
 	}
 	var b [2]byte
 	var head [4]byte
@@ -68,7 +68,7 @@ func TestServer(t *testing.T) {
 			writeKV(fd, k, v)
 		}
 		fmt.Fprintf(fd, "foo=bar%d", n)
-		syscall.Sleep(1e9)
+		time.Sleep(1e9)
 
 		res, _ := http.ReadResponse(bufio.NewReader(fd), lastReq)
 		got := res.Request.Method
@@ -78,7 +78,7 @@ func TestServer(t *testing.T) {
 				string(got), expected)
 		}
 
-		got = res.Request.RawURL
+		got = res.Request.URL.RawPath
 		expected = "/foo"
 		if string(got) != expected {
 			t.Errorf("Unexpected response for request #1; got %q; expected %q",

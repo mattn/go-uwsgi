@@ -117,7 +117,7 @@ func (l *Listener) Accept() (net.Conn, error) {
 	//fmt.Fprintf(buf, "%s %s %s\r\n", c.env["REQUEST_METHOD"], c.env["REQUEST_URI"], c.env["SERVER_PROTOCOL"])
 	fmt.Fprintf(buf, "%s %s %s\r\n", c.env["REQUEST_METHOD"], c.env["REQUEST_URI"], "HTTP/1.0")
 
-	cl, _ := strconv.Atoi64(c.env["CONTENT_LENGTH"])
+	cl, _ := strconv.ParseInt(c.env["CONTENT_LENGTH"], 10, 64)
 	if cl > 0 {
 		fmt.Fprintf(buf, "Content-Length: %d\r\n", cl)
 	}
