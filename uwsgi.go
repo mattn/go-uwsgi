@@ -19,6 +19,7 @@ import (
 	"io"
 	"net"
 	"strconv"
+	"time"
 )
 
 type Listener struct {
@@ -52,17 +53,35 @@ func (c *Conn) RemoteAddr() net.Addr {
 	return c.writer.RemoteAddr()
 }
 
+func (c *Conn) SetDeadline(t time.Time) error {
+	return c.writer.SetDeadline(t)
+}
+
+func (c *Conn) SetReadDeadline(t time.Time) error {
+	return c.writer.SetReadDeadline(t)
+}
+
+func (c *Conn) SetWriteDeadline(t time.Time) error {
+	return c.writer.SetWriteDeadline(t)
+}
+
+/*
 func (c *Conn) SetTimeout(s int64) error {
 	return c.writer.SetTimeout(s)
 }
+*/
 
+/*
 func (c *Conn) SetReadTimeout(s int64) error {
 	return c.writer.SetReadTimeout(s)
 }
+*/
 
+/*
 func (c *Conn) SetWriteTimeout(s int64) error {
 	return c.writer.SetWriteTimeout(s)
 }
+*/
 
 func (l *Listener) Addr() net.Addr {
 	return l.Listener.Addr()
