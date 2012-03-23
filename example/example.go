@@ -18,15 +18,17 @@ func main() {
 		println(e.Error())
 		os.Exit(1)
 	}
-    http.Serve(&uwsgi.Listener{l}, http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-		path := req.URL.Path
-		file := filepath.Join(".", filepath.FromSlash(path))
+	root, _ := filepath.Split(os.Args[0])
+	root, _ = filepath.Abs(root)
+    http.Serve(&uwsgi.Listener{l}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		file := filepath.Join(root, filepath.FromSlash(path))
 		f, e := os.Stat(file)
 		if e == nil && f.IsDir() && path[len(path)-1] != '/' {
-			rw.Header().Set("Location", req.URL.Path + "/")
-			rw.WriteHeader(http.StatusFound)
+			w.Header().Set("Location", r.URL.Path + "/")
+			w.WriteHeader(http.StatusFound)
 			return
 		}
-		http.ServeFile(rw, req, filepath.Join(".", filepath.FromSlash(req.URL.Path)))
+		http.ServeFile(w, r, file)
 	}))
 }
