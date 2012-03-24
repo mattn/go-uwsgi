@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 
 )
 
@@ -21,10 +22,14 @@ func main() {
 	root, _ := filepath.Split(os.Args[0])
 	root, _ = filepath.Abs(root)
     http.Serve(&uwsgi.Listener{l}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		script_name := r.Header.Get("SCRIPT_NAME")
 		path := r.URL.Path
+		if strings.HasPrefix(path, script_name) {
+			path = path[len(script_name):]
+		}
 		file := filepath.Join(root, filepath.FromSlash(path))
 		f, e := os.Stat(file)
-		if e == nil && f.IsDir() && path[len(path)-1] != '/' {
+		if e == nil && f.IsDir() && len(path) > 0 && path[len(path)-1] != '/' {
 			w.Header().Set("Location", r.URL.Path + "/")
 			w.WriteHeader(http.StatusFound)
 			return
