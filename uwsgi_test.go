@@ -78,7 +78,7 @@ func TestServer(t *testing.T) {
 				string(got), expected)
 		}
 
-		got = res.Request.URL.RawPath
+		got = res.Request.URL.Path
 		expected = "/foo"
 		if string(got) != expected {
 			t.Errorf("Unexpected response for request #1; got %q; expected %q",
