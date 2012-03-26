@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"github.com/mattn/go-uwsgi"
 	"path/filepath"
 	"net"
@@ -10,11 +11,26 @@ import (
 
 )
 
+var server = flag.String("s", "unix:///tmp/uwsgi.sock", "server address")
+
 func main() {
-	s := "/tmp/uwsgi.sock"
-	os.Remove(s)
-	l, e := net.Listen("unix", s)
-	os.Chmod(s, 0666)
+	flag.Parse()
+
+	var l net.Listener
+	var e error
+	var s string
+	if strings.HasPrefix(*server, "unix://") {
+		s = (*server)[7:]
+		os.Remove(s)
+		l, e = net.Listen("unix", s)
+		os.Chmod(s, 0666)
+	} else if strings.HasPrefix(*server, "tcp://") {
+		s = (*server)[6:]
+		l, e = net.Listen("tcp", s)
+	} else {
+		flag.PrintDefaults()
+		os.Exit(1)
+	}
 	if e != nil {
 		println(e.Error())
 		os.Exit(1)
