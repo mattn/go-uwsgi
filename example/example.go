@@ -34,6 +34,7 @@ func main() {
 			w.WriteHeader(http.StatusFound)
 			return
 		}
+
 		http.ServeFile(w, r, file)
 	}))
 }
