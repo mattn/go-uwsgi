@@ -173,6 +173,14 @@ func (l *Listener) Accept() (net.Conn, error) {
 		fmt.Fprintf(buf, "Accept-Charset: %s\r\n", v)
 	}
 
+	if v, e := c.env["SCRIPT_NAME"]; e {
+		fmt.Fprintf(buf, "SCRIPT_NAME: %s\r\n", v)
+	}
+
+	if v, e := c.env["PATH_INFO"]; e {
+		fmt.Fprintf(buf, "PATH_INFO: %s\r\n", v)
+	}
+
 	buf.Write([]byte("\r\n"))
 
 	if cl > 0 {
