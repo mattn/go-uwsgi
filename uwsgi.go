@@ -13,12 +13,16 @@ This implements run as net.Listener:
 package uwsgi
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"strconv"
+	"strings"
+	"regexp"
 	"time"
 )
 
@@ -188,4 +192,81 @@ func (l *Listener) Accept() (net.Conn, error) {
 	}
 
 	return c, nil
+}
+
+type Passenger struct {
+	Net string
+	Addr string
+}
+
+var trailingPort = regexp.MustCompile(`:([0-9]+)$`)
+func (p Passenger) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	conn, err := net.Dial(p.Net, p.Addr)
+	if err != nil {
+		panic(err.Error())
+	}
+	defer conn.Close()
+
+	port := "80"
+	if matches := trailingPort.FindStringSubmatch(req.Host); len(matches) != 0 {
+		port = matches[1]
+	}
+
+	header := make(map[string][]string)
+	header["REQUEST_METHOD"] = []string{req.Method}
+	header["REQUEST_URI"] = []string{req.RequestURI}
+	header["CONTENT_LENGTH"] = []string{strconv.Itoa(int(req.ContentLength))}
+	header["SERVER_PROTOCOL"] = []string{req.Proto}
+	header["SERVER_NAME"] = []string{req.Host}
+	header["SERVER_ADDR"] = []string{req.RemoteAddr}
+	header["SERVER_PORT"] = []string{port}
+	header["REMOTE_HOST"] = []string{req.RemoteAddr}
+	header["REMOTE_ADDR"] = []string{req.RemoteAddr}
+	header["SCRIPT_NAME"] = []string{req.URL.Path}
+	header["PATH_INFO"] = []string{req.URL.Path}
+	header["QUERY_STRING"] = []string{req.URL.RawQuery}
+	if ctype := req.Header.Get("Content-Type"); ctype != "" {
+		header["CONTENT_TYPE"] = []string{ctype}
+	}
+	for k, v := range req.Header {
+		if _, ok := header[k]; ok == false {
+			k = "HTTP_" + strings.ToUpper(strings.Replace(k, "-", "_", -1))
+			header[k] = v
+		}
+	}
+
+	var size uint16
+	for k, v := range header {
+		for _, vv := range v {
+			size += uint16(len(([]byte)(k))) + 2
+			size += uint16(len(([]byte)(vv))) + 2
+		}
+	}
+
+	hsize := make([]byte, 4)
+	binary.LittleEndian.PutUint16(hsize[1:3], size)
+	conn.Write(hsize)
+
+	for k, v := range header {
+		for _, vv := range v {
+			binary.Write(conn, binary.LittleEndian, uint16(len(([]byte)(k))))
+			conn.Write([]byte(k))
+			binary.Write(conn, binary.LittleEndian, uint16(len(([]byte)(vv))))
+			conn.Write([]byte(vv))
+		}
+	}
+
+	io.Copy(conn, req.Body)
+
+	res, err := http.ReadResponse(bufio.NewReader(conn), req)
+	if err != nil {
+		panic(err.Error())
+	}
+	for k, v := range res.Header {
+		w.Header().Del(k)
+		for _, vv := range v {
+			w.Header().Add(k, vv)
+		}
+	}
+	io.Copy(w, res.Body)
 }
