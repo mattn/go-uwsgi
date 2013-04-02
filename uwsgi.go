@@ -16,6 +16,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -31,7 +32,7 @@ type Listener struct {
 }
 
 type Conn struct {
-	env    map[string]string
+	env    map[string] []string
 	reader io.Reader
 	writer net.Conn
 }
@@ -95,6 +96,26 @@ func (l *Listener) Close() error {
 	return l.Listener.Close()
 }
 
+var headerMappings = map[string]string{
+	"HTTP_HOST": "Host",
+	"CONTENT_TYPE": "Content-Type",
+	"HTTP_ACCEPT": "Accept",
+	"HTTP_ACCEPT_ENCODING": "Accept-Encoding",
+	"HTTP_ACCEPT_LANGUAGE": "Accept-Language",
+	"HTTP_ACCEPT_CHARSET": "Accept-Charset",
+	"HTTP_CONTENT_TYPE": "Content-Type",
+	"HTTP_COOKIE": "Cookie",
+	"HTTP_CONNECTION" : "Connection",
+	"HTTP_IF_MATCH": "If-Match",
+	"HTTP_IF_MODIFIED_SINCE": "If-Modified-Since",
+	"HTTP_IF_NONE_MATCH": "If-None-Match",
+	"HTTP_IF_RANGE": "If-Range",
+	"HTTP_RANGE": "Range",
+	"HTTP_REFERER": "Referer",
+	"HTTP_USER_AGENT": "User-Agent",
+	"HTTP_X_REQUESTED_WITH": "Requested-With",
+	}
+
 // Accept conduct as net.Listener. uWSGI protocol is working good for CGI.
 // This function parse headers and pass to the Server.
 func (l *Listener) Accept() (net.Conn, error) {
@@ -104,8 +125,17 @@ func (l *Listener) Accept() (net.Conn, error) {
 	}
 
 	buf := new(bytes.Buffer)
-	c := &Conn{map[string]string{}, buf, fd}
+	c := &Conn{make(map[string] []string), buf, fd}
 
+	/*
+	 * uwsgi header:
+	 * struct {
+	 *    uint8  modifier1;
+	 *    uint16 datasize;
+	 *    uint8  modifier2;
+	 * }
+	 *  -- for HTTP, mod1 and mod2 = 0
+	 */
 	var head [4]byte
 	fd.Read(head[:])
 	//mod1 := head[0:0]
@@ -118,71 +148,101 @@ func (l *Listener) Accept() (net.Conn, error) {
 		return nil, err
 	}
 
+	/*
+	 * uwsgi vars are linear lists of the form:
+	 * struct {
+	 *   uint16 key_size;
+	 *   uint8  key[key_size];
+	 *   uint16 val_size;
+	 *   uint8  val[val_size];
+	 * }
+	 */
 	i := uint16(0)
+	var reqMethod string
+	var reqUri string
+	var reqProtocol string
 	for {
+		// Ensure no corrupted payload; shouldn't happen but it has...
+		if i+1 >= uint16(len(envbuf)) {
+			break
+		}
 		b := []byte{envbuf[i], envbuf[i+1]}
 		kl := binary.LittleEndian.Uint16(b)
 		i += 2
+
+		if i+kl > uint16(len(envbuf)) {
+			fd.Close()
+			return nil, errors.New("Invalid uwsgi request; uwsgi vars index out of range")
+		}
+
 		k := string(envbuf[i : i+kl])
 		i += kl
+
+		if i+1 >= uint16(len(envbuf)) {
+			fd.Close()
+			return nil, errors.New("Invalid uwsgi request; uwsgi vars index out of range")
+		}
+
 		b = []byte{envbuf[i], envbuf[i+1]}
 		vl := binary.LittleEndian.Uint16(b)
 		i += 2
+
+		if i+vl > uint16(len(envbuf)) {
+			fd.Close()
+			return nil, errors.New("Invalid uwsgi request; uwsgi vars index out of range")
+		}
+
 		v := string(envbuf[i : i+vl])
 		i += vl
 
-		c.env[k] = v
+		if k == "REQUEST_METHOD" {
+			reqMethod = v
+		} else if k == "REQUEST_URI" {
+			reqUri = v
+		} else if k == "SERVER_PROTOCOL" {
+			reqProtocol = v
+		}
+
+		val, ok := c.env[k]
+		if !ok {
+			val = make([]string, 0, 2)
+		}
+		val = append(val, v)
+		c.env[k] = val
+
 		if i >= envsize {
 			break
 		}
 	}
 
+	if reqProtocol == "" {
+		// Invalid protocol
+		fd.Close()
+		return nil, errors.New("Invalid uwsgi request; no protocol specified")
+	}
+	reqProtocol="HTTP/1.0"
+
+
 	//fmt.Fprintf(buf, "%s %s %s\r\n", c.env["REQUEST_METHOD"], c.env["REQUEST_URI"], c.env["SERVER_PROTOCOL"])
-	fmt.Fprintf(buf, "%s %s %s\r\n", c.env["REQUEST_METHOD"], c.env["REQUEST_URI"], "HTTP/1.0")
+	fmt.Fprintf(buf, "%s %s %s\r\n", reqMethod, reqUri, reqProtocol)
 
-	cl, _ := strconv.ParseInt(c.env["CONTENT_LENGTH"], 10, 64)
-	if cl > 0 {
-		fmt.Fprintf(buf, "Content-Length: %d\r\n", cl)
-	}
-
-	if v := c.env["HTTP_CONTENT_TYPE"]; len(v) > 0 {
-		fmt.Fprintf(buf, "Content-Type: %s\r\n", v)
-	}
-
-	if v := c.env["HTTP_HOST"]; len(v) > 0 {
-		fmt.Fprintf(buf, "Host: %s\r\n", v)
-	}
-
-	if v := c.env["HTTP_CONNECTION"]; len(v) > 0 {
-		fmt.Fprintf(buf, "Connection: %s\r\n", v)
-	}
-
-	if v := c.env["HTTP_ACCEPT"]; len(v) > 0 {
-		fmt.Fprintf(buf, "Accept: %s\r\n", v)
-	}
-
-	if v := c.env["HTTP_USER_AGENT"]; len(v) > 0 {
-		fmt.Fprintf(buf, "User-Agent: %s\r\n", v)
-	}
-
-	if v := c.env["HTTP_ACCEPT_ENCODING"]; len(v) > 0 {
-		fmt.Fprintf(buf, "Accept-Encoding: %s\r\n", v)
-	}
-
-	if v := c.env["HTTP_ACCEPT_LANGUAGE"]; len(v) > 0 {
-		fmt.Fprintf(buf, "Accept-Language: %s\r\n", v)
-	}
-
-	if v := c.env["HTTP_ACCEPT_CHARSET"]; len(v) > 0 {
-		fmt.Fprintf(buf, "Accept-Charset: %s\r\n", v)
-	}
-
-	if v, e := c.env["SCRIPT_NAME"]; e {
-		fmt.Fprintf(buf, "SCRIPT_NAME: %s\r\n", v)
-	}
-
-	if v, e := c.env["PATH_INFO"]; e {
-		fmt.Fprintf(buf, "PATH_INFO: %s\r\n", v)
+	var cl int64
+	for i := range c.env {
+		switch i {
+		case "CONTENT_LENGTH":
+			cl, _ = strconv.ParseInt(c.env[i][0], 10, 64)
+			if cl > 0 {
+				fmt.Fprintf(buf, "Content-Length: %d\r\n", cl)
+			}
+		default:
+			hname, ok := headerMappings[i]
+			if !ok {
+				hname = i
+			}
+			for v := range c.env[i] {
+				fmt.Fprintf(buf, "%s: %s\r\n", hname, c.env[i][v])
+			}
+		}
 	}
 
 	buf.Write([]byte("\r\n"))
