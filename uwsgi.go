@@ -145,6 +145,7 @@ func (l *Listener) Accept() (net.Conn, error) {
 
 	envbuf := make([]byte, envsize)
 	if _, err := io.ReadFull(fd, envbuf); err != nil {
+		fd.Close()
 		return nil, err
 	}
 
