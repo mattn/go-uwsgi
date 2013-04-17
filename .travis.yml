@@ -1,8 +1,6 @@
 language: go
-
 before_install:
   - go get github.com/axw/gocov/gocov
   - go get github.com/mattn/goveralls
-
 script:
-  - go test && $GOPATH/bin/goveralls eFT10FaLZDfE2AeXdZvBg3q9SdlF6OYrx
+    - go test && $GOPATH/bin/goveralls eFT10FaLZDfE2AeXdZvBg3q9SdlF6OYrx github.com/mattn/go-uwsgi
