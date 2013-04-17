@@ -1,1 +1,6 @@
 language: go
+before_install:
+  - go get github.com/axw/gocov/gocov
+  - go get github.com/mattn/goveralls
+script:
+  - go test && goveralls eFT10FaLZDfE2AeXdZvBg3q9SdlF6OYrx
