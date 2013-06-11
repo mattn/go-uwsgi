@@ -3,4 +3,4 @@ before_install:
   - go get github.com/axw/gocov/gocov
   - go get github.com/mattn/goveralls
 script:
-    - goveralls eFT10FaLZDfE2AeXdZvBg3q9SdlF6OYrx
+    - $HOME/gopath/bin/goveralls eFT10FaLZDfE2AeXdZvBg3q9SdlF6OYrx
