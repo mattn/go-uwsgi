@@ -1,6 +1,8 @@
 language: go
+go:
+  - tip
 before_install:
   - go get github.com/mattn/goveralls
   - go get golang.org/x/tools/cmd/cover
 script:
-    - $HOME/gopath/bin/goveralls eFT10FaLZDfE2AeXdZvBg3q9SdlF6OYrx
+    - $HOME/gopath/bin/goveralls -repotoken eFT10FaLZDfE2AeXdZvBg3q9SdlF6OYrx
