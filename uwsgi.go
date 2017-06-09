@@ -21,20 +21,20 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
-	"regexp"
 	"time"
 )
 
 type Listener struct {
-	Listener net.Listener
+	net.Listener
 }
 
 type Conn struct {
-	env     map[string] []string
+	net.Conn
+	env     map[string][]string
 	reader  io.Reader
-	conn    net.Conn
 	hdrdone bool
 	ready   bool
 	readych chan bool
@@ -60,7 +60,7 @@ func (c *Conn) Read(b []byte) (n int, e error) {
 		}
 	}
 	if c.hdrdone {
-		n, e = c.conn.Read(b)
+		n, e = c.Conn.Read(b)
 		c.err = e
 	}
 
@@ -72,19 +72,7 @@ func (c *Conn) Write(b []byte) (int, error) {
 		return 0, c.err
 	}
 
-	return c.conn.Write(b)
-}
-
-func (c *Conn) Close() error {
-	return c.conn.Close()
-}
-
-func (c *Conn) LocalAddr() net.Addr {
-	return c.conn.LocalAddr()
-}
-
-func (c *Conn) RemoteAddr() net.Addr {
-	return c.conn.RemoteAddr()
+	return c.Conn.Write(b)
 }
 
 func (c *Conn) SetDeadline(t time.Time) error {
@@ -92,7 +80,7 @@ func (c *Conn) SetDeadline(t time.Time) error {
 		return c.err
 	}
 
-	return c.conn.SetDeadline(t)
+	return c.Conn.SetDeadline(t)
 }
 
 func (c *Conn) SetReadDeadline(t time.Time) error {
@@ -100,7 +88,7 @@ func (c *Conn) SetReadDeadline(t time.Time) error {
 		return c.err
 	}
 
-	return c.conn.SetReadDeadline(t)
+	return c.Conn.SetReadDeadline(t)
 }
 
 func (c *Conn) SetWriteDeadline(t time.Time) error {
@@ -108,54 +96,27 @@ func (c *Conn) SetWriteDeadline(t time.Time) error {
 		return c.err
 	}
 
-	return c.conn.SetWriteDeadline(t)
-}
-
-/*
-func (c *Conn) SetTimeout(s int64) error {
-	return c.conn.SetTimeout(s)
-}
-*/
-
-/*
-func (c *Conn) SetReadTimeout(s int64) error {
-	return c.conn.SetReadTimeout(s)
-}
-*/
-
-/*
-func (c *Conn) SetWriteTimeout(s int64) error {
-	return c.conn.SetWriteTimeout(s)
-}
-*/
-
-func (l *Listener) Addr() net.Addr {
-	return l.Listener.Addr()
-}
-
-func (l *Listener) Close() error {
-	return l.Listener.Close()
+	return c.Conn.SetWriteDeadline(t)
 }
 
 var headerMappings = map[string]string{
-	"HTTP_HOST": "Host",
-	"CONTENT_TYPE": "Content-Type",
-	"HTTP_ACCEPT": "Accept",
-	"HTTP_ACCEPT_ENCODING": "Accept-Encoding",
-	"HTTP_ACCEPT_LANGUAGE": "Accept-Language",
-	"HTTP_ACCEPT_CHARSET": "Accept-Charset",
-	"HTTP_CONTENT_TYPE": "Content-Type",
-	"HTTP_COOKIE": "Cookie",
-	// "HTTP_CONNECTION" : "Connection",
-	"HTTP_IF_MATCH": "If-Match",
+	"HTTP_HOST":              "Host",
+	"CONTENT_TYPE":           "Content-Type",
+	"HTTP_ACCEPT":            "Accept",
+	"HTTP_ACCEPT_ENCODING":   "Accept-Encoding",
+	"HTTP_ACCEPT_LANGUAGE":   "Accept-Language",
+	"HTTP_ACCEPT_CHARSET":    "Accept-Charset",
+	"HTTP_CONTENT_TYPE":      "Content-Type",
+	"HTTP_COOKIE":            "Cookie",
+	"HTTP_IF_MATCH":          "If-Match",
 	"HTTP_IF_MODIFIED_SINCE": "If-Modified-Since",
-	"HTTP_IF_NONE_MATCH": "If-None-Match",
-	"HTTP_IF_RANGE": "If-Range",
-	"HTTP_RANGE": "Range",
-	"HTTP_REFERER": "Referer",
-	"HTTP_USER_AGENT": "User-Agent",
-	"HTTP_X_REQUESTED_WITH": "Requested-With",
-	}
+	"HTTP_IF_NONE_MATCH":     "If-None-Match",
+	"HTTP_IF_RANGE":          "If-Range",
+	"HTTP_RANGE":             "Range",
+	"HTTP_REFERER":           "Referer",
+	"HTTP_USER_AGENT":        "User-Agent",
+	"HTTP_X_REQUESTED_WITH":  "Requested-With",
+}
 
 // Accept conduct as net.Listener. uWSGI protocol is working good for CGI.
 // This function parse headers and pass to the Server.
@@ -166,7 +127,7 @@ func (l *Listener) Accept() (net.Conn, error) {
 	}
 
 	buf := new(bytes.Buffer)
-	c := &Conn{make(map[string] []string), buf, fd, false, false, make(chan bool, 1), nil}
+	c := &Conn{fd, make(map[string][]string), buf, false, false, make(chan bool, 1), nil}
 
 	go func() {
 		/*
@@ -180,10 +141,8 @@ func (l *Listener) Accept() (net.Conn, error) {
 		 */
 		var head [4]byte
 		fd.Read(head[:])
-		//mod1 := head[0:0]
 		b := []byte{head[1], head[2]}
 		envsize := binary.LittleEndian.Uint16(b)
-		//mod2 := head[3:3]
 
 		envbuf := make([]byte, envsize)
 		if _, err := io.ReadFull(fd, envbuf); err != nil {
@@ -203,7 +162,7 @@ func (l *Listener) Accept() (net.Conn, error) {
 		 */
 		i := uint16(0)
 		var reqMethod string
-		var reqUri string
+		var reqURI string
 		var reqProtocol string
 		for {
 			// Ensure no corrupted payload; shouldn't happen but it has...
@@ -245,10 +204,8 @@ func (l *Listener) Accept() (net.Conn, error) {
 			if k == "REQUEST_METHOD" {
 				reqMethod = v
 			} else if k == "REQUEST_URI" {
-				reqUri = v
+				reqURI = v
 			} else if k == "SERVER_PROTOCOL" {
-				// Ignore protocol; set to 1.0 so that it disconnects from server
-				v = "HTTP/1.0"
 				reqProtocol = v
 			}
 
@@ -270,11 +227,8 @@ func (l *Listener) Accept() (net.Conn, error) {
 			c.err = errors.New("Invalid uwsgi request; no protocol specified")
 			return
 		}
-		reqProtocol="HTTP/1.0"
 
-
-		//fmt.Fprintf(buf, "%s %s %s\r\n", c.env["REQUEST_METHOD"], c.env["REQUEST_URI"], c.env["SERVER_PROTOCOL"])
-		fmt.Fprintf(buf, "%s %s %s\r\n", reqMethod, reqUri, reqProtocol)
+		fmt.Fprintf(buf, "%s %s %s\r\n", reqMethod, reqURI, reqProtocol)
 
 		var cl int64
 		for i := range c.env {
@@ -306,11 +260,12 @@ func (l *Listener) Accept() (net.Conn, error) {
 }
 
 type Passenger struct {
-	Net string
+	Net  string
 	Addr string
 }
 
 var trailingPort = regexp.MustCompile(`:([0-9]+)$`)
+
 func (p Passenger) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	conn, err := net.Dial(p.Net, p.Addr)
 	if err != nil {
