@@ -45,6 +45,7 @@ func TestBasic(t *testing.T) {
 	go server.Serve(&Listener{l})
 
 	m := map[string]string{
+		"HOST":              "localhost",
 		"REQUEST_METHOD":    "POST",
 		"REQUEST_URI":       "/foo",
 		"CONTENT_LENGTH":    "8",
@@ -52,6 +53,7 @@ func TestBasic(t *testing.T) {
 		"HTTP_CONTENT_TYPE": "application/x-www-form-urlencoded",
 		"HTTP_USER_AGENT":   "go",
 	}
+
 	var b [2]byte
 	var head [4]byte
 	for n := 1; n <= 3; n++ {
@@ -108,7 +110,7 @@ func TestServer(t *testing.T) {
 
 	var lastReq *http.Request
 
-	passenger := &Passenger {"tcp", "127.0.0.1"}
+	passenger := &Passenger{"tcp", "127.0.0.1"}
 	handler := http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		passenger.ServeHTTP(res, req)
 		panic("stop")
