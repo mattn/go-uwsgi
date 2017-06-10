@@ -27,10 +27,12 @@ import (
 	"time"
 )
 
+// Listener behave as net.Listener
 type Listener struct {
 	net.Listener
 }
 
+// Conn is connection for uWSGI
 type Conn struct {
 	net.Conn
 	env     map[string][]string
@@ -67,6 +69,7 @@ func (c *Conn) Read(b []byte) (n int, e error) {
 	return n, e
 }
 
+// Writer behave as same as net.Listener
 func (c *Conn) Write(b []byte) (int, error) {
 	if c.err != nil {
 		return 0, c.err
@@ -75,6 +78,7 @@ func (c *Conn) Write(b []byte) (int, error) {
 	return c.Conn.Write(b)
 }
 
+// SetDeadline behave as same as net.Listener
 func (c *Conn) SetDeadline(t time.Time) error {
 	if c.err != nil {
 		return c.err
@@ -83,6 +87,7 @@ func (c *Conn) SetDeadline(t time.Time) error {
 	return c.Conn.SetDeadline(t)
 }
 
+// SetReadDeadline behave as same as net.Listener
 func (c *Conn) SetReadDeadline(t time.Time) error {
 	if c.err != nil {
 		return c.err
@@ -91,6 +96,7 @@ func (c *Conn) SetReadDeadline(t time.Time) error {
 	return c.Conn.SetReadDeadline(t)
 }
 
+// SetWriteDeadline behave as same as net.Listener
 func (c *Conn) SetWriteDeadline(t time.Time) error {
 	if c.err != nil {
 		return c.err
@@ -259,6 +265,7 @@ func (l *Listener) Accept() (net.Conn, error) {
 	return c, nil
 }
 
+// Passenger works as uWSGI transport
 type Passenger struct {
 	Net  string
 	Addr string
