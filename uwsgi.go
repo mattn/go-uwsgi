@@ -247,6 +247,10 @@ func (l *Listener) Accept() (net.Conn, error) {
 			default:
 				hname, ok := headerMappings[i]
 				if !ok {
+					// To avoid double Host headers in some cases, only parse HTTP_HOST as a correct Host.
+					if i == "Host" {
+						continue
+					}
 					hname = i
 				}
 				for v := range c.env[i] {
