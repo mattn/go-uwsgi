@@ -212,6 +212,7 @@ func (l *Listener) Accept() (net.Conn, error) {
 			} else if k == "REQUEST_URI" {
 				reqURI = v
 			} else if k == "SERVER_PROTOCOL" {
+				v = "HTTP/1.0"
 				reqProtocol = v
 			}
 
